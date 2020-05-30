@@ -29,56 +29,50 @@ public class UserMealsUtil {
     }
 
     public static List<UserMealWithExcess> filteredByCycles(List<UserMeal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
-
-        // calculate calories per date and filter meals by time period
+        // calculate calories per date
         Map<LocalDate, Integer> caloriesPerDate = new HashMap<>();
-        List<UserMeal> filteredMeals = new ArrayList<>();
         for (UserMeal meal : meals) {
             caloriesPerDate.put(
-                    meal.getDateTime().toLocalDate(),
-                    meal.getCalories() + caloriesPerDate.getOrDefault(meal.getDateTime().toLocalDate(), 0));
-            if (isBetweenRange(meal.getDateTime(), startTime, endTime)) {
-                filteredMeals.add(meal);
-            }
+                    getDate(meal),
+                    meal.getCalories() + caloriesPerDate.getOrDefault(getDate(meal), 0));
         }
 
         // fill output collection
         List<UserMealWithExcess> filteredMealsWithExcess = new ArrayList<>();
-        for (UserMeal meal : filteredMeals) {
-            filteredMealsWithExcess.add(
-                    new UserMealWithExcess(
-                            meal.getDateTime(),
-                            meal.getDescription(),
-                            meal.getCalories(),
-                            caloriesPerDate.get(meal.getDateTime().toLocalDate()) > caloriesPerDay
-                    )
-            );
+        for (UserMeal meal : meals) {
+            if (TimeUtil.isBetweenHalfOpen(getTime(meal), startTime, endTime)) {
+                filteredMealsWithExcess.add(createUserMealWithExcess(meal, caloriesPerDate.get(getDate(meal)) > caloriesPerDay));
+            }
         }
         return filteredMealsWithExcess;
     }
 
     public static List<UserMealWithExcess> filteredByStreams(List<UserMeal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
-        Map<LocalDate, Integer> caloriesPerDate = new HashMap<>();
+        // calculate calories per date
+        Map<LocalDate, Integer> caloriesPerDate =
+                meals.stream().collect(Collectors.toMap(UserMealsUtil::getDate, UserMeal::getCalories, Integer::sum));
+
+        // build and return output collection
         return meals.stream()
-                .map(meal -> {
-                    caloriesPerDate.put(
-                            meal.getDateTime().toLocalDate(),
-                            meal.getCalories() + caloriesPerDate.getOrDefault(meal.getDateTime().toLocalDate(), 0));
-                    return meal;
-                })
-                .filter(meal -> isBetweenRange(meal.getDateTime(), startTime, endTime))
-                .collect(Collectors.toList())
-                .stream()
-                .map(meal -> new UserMealWithExcess(
-                        meal.getDateTime(),
-                        meal.getDescription(),
-                        meal.getCalories(),
-                        caloriesPerDate.get(meal.getDateTime().toLocalDate()) > caloriesPerDay
-                ))
+                .filter(meal -> TimeUtil.isBetweenHalfOpen(getTime(meal), startTime, endTime))
+                .map(meal -> createUserMealWithExcess(meal, caloriesPerDate.get(meal.getDateTime().toLocalDate()) > caloriesPerDay))
                 .collect(Collectors.toList());
     }
 
-    private static boolean isBetweenRange(LocalDateTime dateTime, LocalTime startTime, LocalTime endTime) {
-        return dateTime.toLocalTime().compareTo(startTime) >= 0 && dateTime.toLocalTime().compareTo(endTime) <= 0;
+    private static LocalTime getTime(UserMeal meal) {
+        return meal.getDateTime().toLocalTime();
+    }
+
+    private static LocalDate getDate(UserMeal meal) {
+        return meal.getDateTime().toLocalDate();
+    }
+
+    private static UserMealWithExcess createUserMealWithExcess(UserMeal meal, boolean excess) {
+        return new UserMealWithExcess(
+                meal.getDateTime(),
+                meal.getDescription(),
+                meal.getCalories(),
+                excess
+        );
     }
 }
